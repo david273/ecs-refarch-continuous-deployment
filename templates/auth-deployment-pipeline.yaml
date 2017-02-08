@@ -156,6 +156,8 @@ Resources:
                 - $(aws ecr get-login)
             build:
               commands:
+                - npm install
+                - npm build
                 - docker build --tag "$(cat /tmp/build_tag.out)" .
             post_build:
               commands:
