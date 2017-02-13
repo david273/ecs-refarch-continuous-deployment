@@ -3,12 +3,22 @@ Parameters:
     Type: String
     Default: latest
 
+  JwtPrivateKey:
+    Type: String
+
+  ApiAuthUsername:
+    Type: String
+
+  ApiAuthPassword:
+    Type: String
+
   DesiredCount:
     Type: Number
     Default: 0
 
-  TargetGroup:
+  LoadBalancerTargetGroup:
     Type: String
+    Description: Arn of load balancer target group
 
   Cluster:
     Type: String
@@ -43,45 +53,30 @@ Resources:
       DesiredCount: !Ref DesiredCount
       TaskDefinition: !Ref TaskDefinition
       LoadBalancers:
-        - ContainerName: simple-app
-          ContainerPort: 80
-          TargetGroupArn: !Ref TargetGroup
+        - ContainerName: auth-service
+          ContainerPort: 3000
+          TargetGroupArn: !Ref LoadBalancerTargetGroup
 
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub ${AWS::StackName}-simple-app
+      Family: !Sub ${AWS::StackName}-auth-service
       ContainerDefinitions:
-        - Name: simple-app
+        - Name: auth-service
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repository}:${Tag}
-          EntryPoint:
-            - /usr/sbin/apache2
-            - -D
-            - FOREGROUND
           Essential: true
-          Memory: 128
-          MountPoints:
-            - SourceVolume: my-vol
-              ContainerPath: /var/www/my-vol
+          Memory: 1024
           PortMappings:
-            - ContainerPort: 80
+            - ContainerPort: 3000
           Environment:
             - Name: Tag
               Value: !Ref Tag
-        - Name: busybox
-          Image: busybox
-          EntryPoint:
-            - sh
-            - -c
-          Essential: false
-          Memory: 128
-          VolumesFrom:
-            - SourceContainer: simple-app
-          Command:
-            - /bin/sh -c "while true; do /bin/date > /var/www/my-vol/date; sleep 1; done"
-      Volumes:
-        - Name: my-vol
-
+            - Name: JWT_KEY
+              Value: !Ref JwtPrivateKey
+            - Name: API_USERNAME
+              Value: !Ref ApiAuthUsername
+            - Name: API_PASSWORD
+              Value: !Ref ApiAuthPassword
 
 Outputs:
   Repository:

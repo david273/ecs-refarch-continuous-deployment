@@ -1,22 +1,30 @@
 Description: >
-  This template illustrates how to use AWS CodeBuild and AWS CodePipeline to
-  achieve continuous deployment of source code from a GitHub repository via a
-  Docker container to an Amazon EC2 Container Service cluster.
-
+  This template sets up the full stack with continuous deployment for 
+  the auth service. 
 
 Parameters:
+  JwtPrivateKey:
+    Type: String
+    Description: Shared private key used between services for token signing.
+
+  ApiAuthUsername:
+    Type: String
+    Description: Username used for basic authentication when accessing service apis.
+
+  ApiAuthPassword:
+    Type: String
+    Description: Password used for basic authentication when accessing service apis.
+
   GitHubUser:
     Type: String
-    Description: Your username on GitHub.
+    Description: Username on GitHub.
 
   GitHubRepo:
     Type: String
-    Default: ecs-demo-php-simple-app
-    Description: The repo name of the sample service.
+    Description: Repo name of the auth service.
 
   GitHubBranch:
     Type: String
-    Default: master
     Description: The branch of the repo to continuously deploy.
 
   GitHubToken:
@@ -28,18 +36,27 @@ Parameters:
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterLabels:
+      JwtPrivateKey:
+        default: "Jwt Private Key"
+      ApiAuthUsername:
+        default: "Api Username"
+      ApiAuthPassword:
+        default: "Api Password"
       GitHubUser:
-        default: "User"
+        default: "Github User"
       GitHubRepo:
-        default: "Repo"
+        default: "Github Repo"
       GitHubBranch:
-        default: "Branch"
+        default: "Github Branch"
       GitHubToken:
         default: "Personal Access Token"
     ParameterGroups:
       - Label:
           default: GitHub Configuration
         Parameters:
+          - JwtPrivateKey
+          - ApiAuthUsername
+          - ApiAuthPassword
           - GitHubRepo
           - GitHubBranch
           - GitHubUser
@@ -50,7 +67,7 @@ Resources:
   Cluster:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.amazonaws.com/ecs-refarch-continuous-deployment/templates/ecs-cluster.yaml
+      TemplateURL: https://s3.amazonaws.com/compeat/auth-ecs-cluster.yaml
       Parameters:
         SourceSecurityGroup: !GetAtt LoadBalancer.Outputs.SecurityGroup
         Subnets: !GetAtt VPC.Outputs.Subnets
@@ -59,22 +76,25 @@ Resources:
   DeploymentPipeline:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.amazonaws.com/ecs-refarch-continuous-deployment/templates/deployment-pipeline.yaml
+      TemplateURL: https://s3.amazonaws.com/compeat/auth-deployment-pipeline.yaml
       Parameters:
         Cluster: !GetAtt Cluster.Outputs.ClusterName
         GitHubUser: !Ref GitHubUser
         GitHubToken: !Ref GitHubToken
         GitHubRepo: !Ref GitHubRepo
         GitHubBranch: !Ref GitHubBranch
-        TargetGroup: !GetAtt LoadBalancer.Outputs.TargetGroup
-        Repository: !GetAtt Service.Outputs.Repository
-        StackName: !GetAtt Service.Outputs.StackName
-        TemplateBucket: ecs-refarch-continuous-deployment
+        LoadBalancerTargetGroup: !GetAtt LoadBalancer.Outputs.TargetGroup
+        ServiceRepository: !GetAtt Service.Outputs.Repository
+        ServiceStackName: !GetAtt Service.Outputs.StackName
+        TemplateBucket: auth-service-deployment
+        JwtPrivateKey: !Ref JwtPrivateKey
+        ApiAuthUsername: !Ref ApiAuthUsername
+        ApiAuthPassword: !Ref ApiAuthPassword
 
   LoadBalancer:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.amazonaws.com/ecs-refarch-continuous-deployment/templates/load-balancer.yaml
+      TemplateURL: https://s3.amazonaws.com/compeat/auth-load-balancer.yaml
       Parameters:
         Subnets: !GetAtt VPC.Outputs.Subnets
         VpcId: !GetAtt VPC.Outputs.VpcId
@@ -82,15 +102,18 @@ Resources:
   Service:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.amazonaws.com/ecs-refarch-continuous-deployment/templates/service.yaml
+      TemplateURL: https://s3.amazonaws.com/compeat/auth-service.yaml
       Parameters:
         Cluster: !GetAtt Cluster.Outputs.ClusterName
-        TargetGroup: !GetAtt LoadBalancer.Outputs.TargetGroup
+        LoadBalancerTargetGroup: !GetAtt LoadBalancer.Outputs.TargetGroup
+        JwtPrivateKey: !Ref JwtPrivateKey
+        ApiAuthUsername: !Ref ApiAuthUsername
+        ApiAuthPassword: !Ref ApiAuthPassword
 
   VPC:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.amazonaws.com/ecs-refarch-continuous-deployment/templates/vpc.yaml
+      TemplateURL: https://s3.amazonaws.com/compeat/auth-vpc.yaml
       Parameters:
         Name: !Ref AWS::StackName
         VpcCIDR: 10.215.0.0/16
@@ -100,7 +123,7 @@ Resources:
 
 Outputs:
   ServiceUrl:
-    Description: The sample service that is being continuously deployed.
+    Description: The auth service.
     Value: !GetAtt LoadBalancer.Outputs.ServiceUrl
 
   PipelineUrl:

@@ -1,23 +1,31 @@
 Parameters:
   GitHubRepo:
     Type: String
+    Default: Service.Auth
+    Description: Repo name of the auth service.
 
   GitHubBranch:
     Type: String
+    Default: master
 
   GitHubToken:
     Type: String
+    Description: >
+      Token for the user specified above. (https://github.com/settings/tokens)
 
   GitHubUser:
     Type: String
+    Default: compeat
+    Description: Username on GitHub.
 
-  TargetGroup:
+  LoadBalancerTargetGroup:
+    Type: String
+    Description: Arn of the the load balancer target group.
+
+  ServiceStackName:
     Type: String
 
-  StackName:
-    Type: String
-
-  Repository:
+  ServiceRepository:
     Type: String
 
   Cluster:
@@ -25,7 +33,17 @@ Parameters:
 
   TemplateBucket:
     Type: String
+    Description: S3 Bucket where templates.zip file is located containing cloud formation templates needed for this pipeline.
+  
+  ApiAuthUsername:
+    Type: String
 
+  ApiAuthPassword:
+    Type: String
+
+  JwtPrivateKey:
+    Type: String
+    Description: Private key used to sign jwt tokens.
 
 Resources:
   CloudFormationExecutionRole:
@@ -85,7 +103,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:GetObjectVersion
-              - Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${Repository}
+              - Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ServiceRepository}
                 Effect: Allow
                 Action:
                   - ecr:GetDownloadUrlForLayer
@@ -156,8 +174,6 @@ Resources:
                 - $(aws ecr get-login)
             build:
               commands:
-                - npm install
-                - npm build
                 - docker build --tag "$(cat /tmp/build_tag.out)" .
             post_build:
               commands:
@@ -173,7 +189,7 @@ Resources:
           - Name: AWS_DEFAULT_REGION
             Value: !Ref AWS::Region
           - Name: REPOSITORY_URI
-            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repository}
+            Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ServiceRepository}
       Name: !Ref AWS::StackName
       ServiceRole: !Ref CodeBuildServiceRole
 
@@ -239,16 +255,19 @@ Resources:
               Configuration:
                 ChangeSetName: Deploy
                 ActionMode: CREATE_UPDATE
-                StackName: !Ref StackName
+                StackName: !Ref ServiceStackName
                 Capabilities: CAPABILITY_NAMED_IAM
-                TemplatePath: Template::templates/service.yaml
+                TemplatePath: Template::auth-service.yaml
                 RoleArn: !GetAtt CloudFormationExecutionRole.Arn
                 ParameterOverrides: !Sub |
                   {
                     "Tag" : { "Fn::GetParam" : [ "BuildOutput", "build.json", "tag" ] },
                     "DesiredCount": "1",
                     "Cluster": "${Cluster}",
-                    "TargetGroup": "${TargetGroup}"
+                    "LoadBalancerTargetGroup": "${LoadBalancerTargetGroup}",
+                    "JwtPrivateKey": "${JwtPrivateKey}",
+                    "ApiAuthUsername": "${ApiAuthUsername}",
+                    "ApiAuthPassword": "${ApiAuthPassword}"
                   }
               InputArtifacts:
                 - Name: Template
